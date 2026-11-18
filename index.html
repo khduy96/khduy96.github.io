@@ -229,7 +229,7 @@ body.show .ui {
 
     <div class="controls">
       <button id="showBtn" class="primary">Trình diễn ✨</button>
-      <button id="styleBtn">Chữ: Nổ thành hình 💥</button>
+      <button id="styleBtn">Chữ: Que pháo bông ✨</button>
       <button id="burstBtn">Bắn loạt 🎆</button>
       <button id="autoBtn" class="active">Tự động: BẬT</button>
       <button id="soundBtn" class="active">🔊 Âm thanh</button>
@@ -918,7 +918,28 @@ function buildTextLayer(text, withGlow = true) {
       each((t, x, y) => g.fillText(t, x, y));
       g.restore();
     }
+
+    // Emoji: the shifted strands above would blur them into a mess, so wipe their boxes
+    // and draw each emoji once, crisp, with a soft warm sparkler halo around it
+    g.save();
+    g.textAlign = "left";
+    for (const ch of chars) {
+      if (!ch.emoji) continue;
+      g.clearRect(ch.x0 - 2, ch.y - size * 0.62, ch.x1 - ch.x0 + 4, size * 1.24);
+      g.shadowColor = "rgba(255, 150, 60, 0.9)";
+      g.shadowBlur = size * 0.15;
+      g.fillText(ch.text, ch.x0, ch.y);
+      g.shadowBlur = 0;
+      g.fillText(ch.text, ch.x0, ch.y);
+    }
+    g.restore();
   }
+
+  // Sparks come from the letter strokes; emoji pixels (coloured, not white) only rarely
+  // spark from their edge, so the sparks never cover the emoji's details
+  const sparkPts = pts.filter((p) => Math.max(p.r, p.g, p.b) - Math.min(p.r, p.g, p.b) < 40);
+  const emojiPts = pts.filter((p) => Math.max(p.r, p.g, p.b) - Math.min(p.r, p.g, p.b) >= 40);
+  for (let i = 0; i < emojiPts.length; i += 25) sparkPts.push(emojiPts[i]);
 
   // Bounding box of the text (padded to cover glow + sparks), used to keep rocket trails off it
   const pad = 45;
@@ -934,7 +955,7 @@ function buildTextLayer(text, withGlow = true) {
   }
   const rect = { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
 
-  return { canvas: gc, pts, rect, size, chars, lineH };
+  return { canvas: gc, pts, sparkPts, rect, size, chars, lineH };
 }
 
 // A spark from a shell burst that flies into place on the text, then fades as the text ignites
@@ -1025,7 +1046,7 @@ class SparklerWriting {
     }
 
     // Spiky sparks along the strokes
-    const pts = this.layer.pts;
+    const pts = this.layer.sparkPts;
     const n = Math.floor((pts.length / 12) * I);
     for (let k = 0; k < n; k++) {
       const p = pts[(Math.random() * pts.length) | 0];
@@ -1307,10 +1328,11 @@ function burstText(text) {
 }
 
 // Text style: "burst" (shaped shell, like heart/star) or "sparkler" (light-painting)
-const STYLE_STORAGE_KEY = "fireworks-text-style";
-let textStyle = "burst";
+// Default is "sparkler". New storage key so a choice saved under the old default is not reused.
+const STYLE_STORAGE_KEY = "fireworks-text-style-v2";
+let textStyle = "sparkler";
 try {
-  if (localStorage.getItem(STYLE_STORAGE_KEY) === "sparkler") textStyle = "sparkler";
+  if (localStorage.getItem(STYLE_STORAGE_KEY) === "burst") textStyle = "burst";
 } catch (e) {}
 
 function writeText(text) {
